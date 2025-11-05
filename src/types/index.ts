@@ -28,6 +28,7 @@ export interface CalendarEvent {
   };
   colorId?: string;
   calendarId?: string;
+  accountEmail?: string; // Email account this event belongs to (for multi-account support)
 }
 
 // Email Types

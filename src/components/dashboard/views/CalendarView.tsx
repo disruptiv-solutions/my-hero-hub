@@ -1,23 +1,59 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+import {
+  format,
+  startOfWeek,
+  startOfMonth,
+  endOfMonth,
+  addDays,
+  addWeeks,
+  addMonths,
+  subWeeks,
+  subMonths,
+  isSameDay,
+  isSameMonth,
+  eachDayOfInterval,
+} from "date-fns";
 import { CalendarEvent } from "@/types";
 import { getAuthHeaders } from "@/lib/api-helpers";
 import { Card } from "@/components/ui/card";
-import { Clock, MapPin, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Clock, Users, ChevronLeft, ChevronRight } from "lucide-react";
+
+type ViewType = "week" | "month" | "year";
 
 const CalendarView = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewType, setViewType] = useState<ViewType>("month");
+
+  // Calculate date range based on view type
+  const getDateRange = () => {
+    if (viewType === "week") {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      const weekEnd = addDays(weekStart, 6);
+      return { timeMin: weekStart, timeMax: weekEnd };
+    } else if (viewType === "month") {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      return { timeMin: monthStart, timeMax: monthEnd };
+    } else {
+      // Year view - show entire year
+      const yearStart = new Date(currentDate.getFullYear(), 0, 1);
+      const yearEnd = new Date(currentDate.getFullYear(), 11, 31);
+      return { timeMin: yearStart, timeMax: yearEnd };
+    }
+  };
+
+  const { timeMin, timeMax } = getDateRange();
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["calendar-events-week"],
+    queryKey: ["calendar-events", viewType, format(currentDate, "yyyy-MM")],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const timeMin = new Date().toISOString();
-      const timeMax = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ).toISOString();
       const res = await fetch(
-        `/api/calendar/events?timeMin=${timeMin}&timeMax=${timeMax}&maxResults=50`,
+        `/api/calendar/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&maxResults=250`,
         { headers }
       );
       if (!res.ok) {
@@ -33,8 +69,48 @@ const CalendarView = () => {
     retry: false,
   });
 
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const handlePrevious = () => {
+    if (viewType === "week") {
+      setCurrentDate(subWeeks(currentDate, 1));
+    } else if (viewType === "month") {
+      setCurrentDate(subMonths(currentDate, 1));
+    } else {
+      setCurrentDate(subMonths(currentDate, 12));
+    }
+  };
+
+  const handleNext = () => {
+    if (viewType === "week") {
+      setCurrentDate(addWeeks(currentDate, 1));
+    } else if (viewType === "month") {
+      setCurrentDate(addMonths(currentDate, 1));
+    } else {
+      setCurrentDate(addMonths(currentDate, 12));
+    }
+  };
+
+  const handleToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const getCalendarDays = () => {
+    if (viewType === "week") {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+    } else if (viewType === "month") {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+      const calendarEnd = startOfWeek(monthEnd, { weekStartsOn: 0 });
+      const days = eachDayOfInterval({ start: calendarStart, end: addDays(calendarEnd, 6) });
+      return days;
+    } else {
+      // Year view - show months in a grid
+      return [];
+    }
+  };
+
+  const calendarDays = getCalendarDays();
 
   const getEventsForDay = (day: Date) => {
     return (
@@ -45,6 +121,17 @@ const CalendarView = () => {
         return isSameDay(eventDate, day);
       }) || []
     );
+  };
+
+  const getHeaderText = () => {
+    if (viewType === "week") {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      return `Week of ${format(weekStart, "MMM d, yyyy")}`;
+    } else if (viewType === "month") {
+      return format(currentDate, "MMMM yyyy");
+    } else {
+      return format(currentDate, "yyyy");
+    }
   };
 
   if (isLoading) {
@@ -70,58 +157,179 @@ const CalendarView = () => {
 
   return (
     <div className="space-y-4">
+      {/* Header with Navigation */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold text-white">Calendar</h2>
-        <div className="text-sm text-gray-400">
-          Week of {format(weekStart, "MMM d, yyyy")}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1">
+            <Button
+              variant={viewType === "week" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewType("week")}
+              className="text-xs"
+            >
+              Week
+            </Button>
+            <Button
+              variant={viewType === "month" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewType("month")}
+              className="text-xs"
+            >
+              Month
+            </Button>
+            <Button
+              variant={viewType === "year" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewType("year")}
+              className="text-xs"
+            >
+              Year
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-3">
-        {weekDays.map((day) => {
-          const events = getEventsForDay(day);
-          const isToday = isSameDay(day, new Date());
+      {/* Navigation Controls */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrevious}
+            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleToday}
+            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+          >
+            Today
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNext}
+            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="text-lg font-semibold text-white">
+          {getHeaderText()}
+        </div>
+      </div>
 
-          return (
-            <Card
-              key={day.toISOString()}
-              className={`bg-gray-800 border-gray-700 p-3 min-h-[200px] ${
-                isToday ? "ring-2 ring-blue-500" : ""
-              }`}
-            >
-              <div className="text-center mb-3">
-                <div className="text-xs text-gray-400 uppercase">
-                  {format(day, "EEE")}
+      {/* Calendar Grid */}
+      {viewType === "year" ? (
+        <div className="grid grid-cols-4 gap-4">
+          {Array.from({ length: 12 }, (_, i) => {
+            const monthDate = new Date(currentDate.getFullYear(), i, 1);
+            const monthEvents = data?.events?.filter((event: CalendarEvent) => {
+              const eventDate = new Date(
+                event.start.dateTime || event.start.date || ""
+              );
+              return isSameMonth(eventDate, monthDate);
+            }) || [];
+            
+            return (
+              <Card
+                key={i}
+                className="bg-gray-800 border-gray-700 p-4 cursor-pointer hover:bg-gray-750 transition-colors"
+                onClick={() => {
+                  setCurrentDate(monthDate);
+                  setViewType("month");
+                }}
+              >
+                <div className="text-center">
+                  <div className="text-sm font-semibold text-white mb-2">
+                    {format(monthDate, "MMMM")}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {monthEvents.length} event{monthEvents.length !== 1 ? "s" : ""}
+                  </div>
                 </div>
-                <div
-                  className={`text-xl font-bold ${
-                    isToday ? "text-blue-400" : "text-white"
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          {/* Day Headers */}
+          <div className="grid grid-cols-7 gap-3 mb-2">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div key={day} className="text-center text-sm font-semibold text-gray-400">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar Days */}
+          <div className="grid grid-cols-7 gap-3">
+            {calendarDays.map((day) => {
+              const events = getEventsForDay(day);
+              const isToday = isSameDay(day, new Date());
+              const isCurrentMonth = isSameMonth(day, currentDate);
+
+              return (
+                <Card
+                  key={day.toISOString()}
+                  className={`bg-gray-800 border-gray-700 p-3 ${
+                    viewType === "month" ? "min-h-[120px]" : "min-h-[200px]"
+                  } ${
+                    isToday ? "ring-2 ring-blue-500" : ""
+                  } ${
+                    !isCurrentMonth && viewType === "month"
+                      ? "opacity-40"
+                      : ""
                   }`}
                 >
-                  {format(day, "d")}
-                </div>
-              </div>
-              <div className="space-y-2">
-                {events.map((event: CalendarEvent) => (
-                  <Card
-                    key={event.id}
-                    className="bg-gray-900 border-gray-600 p-2 hover:bg-gray-750 cursor-pointer transition-colors"
-                  >
-                    <div className="text-xs font-medium text-white mb-1 line-clamp-2">
-                      {event.summary}
+                  <div className="text-center mb-2">
+                    {viewType === "week" && (
+                      <div className="text-xs text-gray-400 uppercase mb-1">
+                        {format(day, "EEE")}
+                      </div>
+                    )}
+                    <div
+                      className={`text-lg font-bold ${
+                        isToday ? "text-blue-400" : isCurrentMonth ? "text-white" : "text-gray-500"
+                      }`}
+                    >
+                      {format(day, "d")}
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-400">
-                      <Clock className="w-3 h-3" />
-                      {event.start.dateTime &&
-                        format(new Date(event.start.dateTime), "h:mm a")}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                  </div>
+                  <div className="space-y-1">
+                    {events.slice(0, viewType === "month" ? 3 : 10).map((event: CalendarEvent) => (
+                      <Card
+                        key={event.id}
+                        className="bg-gray-900 border-gray-600 p-1.5 hover:bg-gray-750 cursor-pointer transition-colors"
+                      >
+                        <div className="text-xs font-medium text-white mb-0.5 line-clamp-1">
+                          {event.summary}
+                        </div>
+                        {event.start.dateTime && (
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <Clock className="w-3 h-3" />
+                            {format(new Date(event.start.dateTime), "h:mm a")}
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                    {events.length > (viewType === "month" ? 3 : 10) && (
+                      <div className="text-xs text-gray-500 text-center pt-1">
+                        +{events.length - (viewType === "month" ? 3 : 10)} more
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Today's Events Detail */}
       <Card className="bg-gray-800 border-gray-700 p-4 mt-6">

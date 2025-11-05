@@ -32,13 +32,35 @@ Vercel is the easiest way to deploy Next.js applications.
 
 3. **Configure Environment Variables**
    
-   In Vercel dashboard, add these variables:
+   In Vercel dashboard → Settings → Environment Variables, add these variables:
    
+   **Firebase Client Configuration (Public):**
+   ```
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
+   NEXT_PUBLIC_FIREBASE_APP_ID=1:123456789:web:abc123
+   ```
+   
+   **Firebase Admin SDK (Server-side only - IMPORTANT):**
+   ```
+   FIREBASE_PROJECT_ID=your-project-id
+   FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...your key...\n-----END PRIVATE KEY-----\n"
+   ```
+   
+   **Note:** For `FIREBASE_PRIVATE_KEY`, copy the entire key from your `.env.local` file including the `\n` line breaks. Vercel will handle the escaping automatically.
+   
+   **Optional - Other Variables:**
    ```
    GOOGLE_CLIENT_ID=your_google_client_id
    GOOGLE_CLIENT_SECRET=your_google_client_secret
    NEXTAUTH_SECRET=your_generated_secret
    NEXTAUTH_URL=https://your-app.vercel.app
+   ANTHROPIC_API_KEY=your_anthropic_api_key (if using AI features)
+   OPENAI_API_KEY=your_openai_api_key (if using voice notes)
    ```
 
 4. **Update Google OAuth**
