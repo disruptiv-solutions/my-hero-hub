@@ -154,13 +154,19 @@ const ProfilePage = () => {
   };
 
   const handleNestedInputChange = (section: string, field: string, value: boolean) => {
-    setProfile(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof typeof prev],
-        [field]: value
+    setProfile(prev => {
+      const sectionValue = prev[section as keyof typeof prev];
+      if (typeof sectionValue === 'object' && sectionValue !== null) {
+        return {
+          ...prev,
+          [section]: {
+            ...(sectionValue as Record<string, any>),
+            [field]: value
+          }
+        };
       }
-    }));
+      return prev;
+    });
   };
 
   return (
