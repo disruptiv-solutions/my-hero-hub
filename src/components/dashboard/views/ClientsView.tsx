@@ -695,7 +695,7 @@ const ClientsView = () => {
                     onValueChange={(value) => handleInputChange("status", value)}
                   >
                     <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                      <SelectValue placeholder="Select status" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-gray-800 border-gray-700 text-white">
                       <SelectItem value="lead">Lead</SelectItem>
