@@ -80,6 +80,8 @@ export interface Client {
   createdDate: string;
   notes?: string;
   projectCount?: number;
+  newsletterSubscribed?: boolean;
+  events?: string[];
 }
 
 export interface Project {

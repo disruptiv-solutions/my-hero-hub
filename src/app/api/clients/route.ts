@@ -3,6 +3,15 @@ import { getFirebaseUser } from "@/lib/auth-helpers";
 import { adminDb } from "@/lib/firebase-admin";
 import { Client } from "@/types";
 
+const slugify = (str: string) =>
+  String(str || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getFirebaseUser(request);
@@ -37,6 +46,8 @@ export async function GET(request: NextRequest) {
         createdDate: data.createdDate,
         notes: data.notes || undefined,
         projectCount: data.projectCount || 0,
+        newsletterSubscribed: data.newsletterSubscribed || false,
+        events: Array.isArray(data.events) ? data.events : [],
       });
     });
 
@@ -92,6 +103,11 @@ export async function POST(request: NextRequest) {
       createdDate: new Date().toISOString(),
       notes: body.notes || null,
       projectCount: 0,
+      newsletterSubscribed: Boolean(body.newsletterSubscribed) || false,
+      slug: slugify(body.name),
+      events: Array.isArray(body.events)
+        ? body.events.filter((e: any) => typeof e === "string" && e.trim()).map((e: string) => e.trim())
+        : [],
     };
 
     // Add to Firestore
@@ -147,6 +163,7 @@ export async function PUT(request: NextRequest) {
     // Update client
     const updateData: any = {};
     if (body.name !== undefined) updateData.name = body.name;
+    if (body.name !== undefined) updateData.slug = slugify(body.name);
     if (body.email !== undefined) updateData.email = body.email;
     if (body.phone !== undefined) updateData.phone = body.phone || null;
     if (body.status !== undefined) updateData.status = body.status;
@@ -154,6 +171,12 @@ export async function PUT(request: NextRequest) {
     if (body.notes !== undefined) updateData.notes = body.notes || null;
     if (body.lastContact !== undefined) updateData.lastContact = body.lastContact || null;
     if (body.projectCount !== undefined) updateData.projectCount = body.projectCount;
+    if (body.newsletterSubscribed !== undefined) updateData.newsletterSubscribed = Boolean(body.newsletterSubscribed);
+    if (Array.isArray(body.events)) {
+      updateData.events = body.events
+        .filter((e: any) => typeof e === "string" && e.trim())
+        .map((e: string) => e.trim());
+    }
 
     await clientRef.update(updateData);
 
@@ -172,6 +195,8 @@ export async function PUT(request: NextRequest) {
       createdDate: updatedData.createdDate,
       notes: updatedData.notes || undefined,
       projectCount: updatedData.projectCount || 0,
+      newsletterSubscribed: updatedData.newsletterSubscribed || false,
+      events: Array.isArray(updatedData.events) ? updatedData.events : [],
     };
 
     return NextResponse.json({ client: updatedClient });

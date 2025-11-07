@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthHeaders } from "@/lib/api-helpers";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "@/lib/hooks/use-toast";
+import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import ConversationsSidebar from "./ConversationsSidebar";
 
@@ -33,7 +34,7 @@ interface Task {
 }
 
 const RightSidebar = () => {
-  const { activeTab } = useAppStore();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -222,7 +223,7 @@ const RightSidebar = () => {
     clientsData?.clients?.filter((c: any) => c.status === "active").length || 0;
 
   // Show Conversations sidebar when Chat tab is active
-  if (activeTab === "chat") {
+  if (pathname?.startsWith("/dashboard/chat")) {
     const handleConversationSelect = (id: string | null) => {
       setActiveConversationId(id);
       // Dispatch custom event to notify ChatView

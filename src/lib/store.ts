@@ -5,8 +5,6 @@ interface AppState {
   tasks: Task[];
   activityFeed: ActivityItem[];
   selectedCalendarIds: string[];
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
   addTask: (task: Omit<Task, "id">) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
@@ -66,8 +64,6 @@ export const useAppStore = create<AppState>((set) => ({
     },
   ],
   selectedCalendarIds: [],
-  activeTab: "calendar",
-  setActiveTab: (tab) => set({ activeTab: tab }),
   addTask: (task) =>
     set((state) => ({
       tasks: [

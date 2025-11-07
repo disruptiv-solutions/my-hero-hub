@@ -1,20 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import ChatView from "./views/ChatView";
-import { useAppStore } from "@/lib/store";
 
 // This wrapper manages the conversation ID state
 export default function ChatViewWrapper() {
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const { activeTab } = useAppStore();
+  const pathname = usePathname();
 
-  // Reset conversation when switching away from chat tab
   useEffect(() => {
-    if (activeTab !== "chat") {
+    if (!pathname?.startsWith("/dashboard/chat")) {
       setConversationId(null);
     }
-  }, [activeTab]);
+  }, [pathname]);
 
   // Listen for conversation selection from sidebar
   useEffect(() => {
@@ -35,6 +34,11 @@ export default function ChatViewWrapper() {
     window.dispatchEvent(new CustomEvent("conversation-select", { detail: id }));
   };
 
-  return <ChatView conversationId={conversationId} onConversationChange={handleConversationChange} />;
+  return (
+    <ChatView
+      conversationId={conversationId}
+      onConversationChange={handleConversationChange}
+    />
+  );
 }
 
