@@ -118,7 +118,7 @@ export const adminAuth = new Proxy({} as Auth, {
   get(_target, prop) {
     // During build time, return a no-op function to prevent initialization errors
     if (isBuildTime() && !process.env.FIREBASE_PROJECT_ID) {
-      if (typeof prop === 'string' && prop !== 'then' && prop !== Symbol.toPrimitive) {
+      if (prop !== 'then' && prop !== Symbol.toPrimitive) {
         return () => {
           throw new Error(
             'Firebase Admin is not initialized. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in your Vercel environment variables.'
@@ -140,7 +140,7 @@ export const adminDb = new Proxy({} as Firestore, {
   get(_target, prop) {
     // During build time, return a no-op function to prevent initialization errors
     if (isBuildTime() && !process.env.FIREBASE_PROJECT_ID) {
-      if (typeof prop === 'string' && prop !== 'then' && prop !== Symbol.toPrimitive) {
+      if (prop !== 'then' && prop !== Symbol.toPrimitive) {
         return () => {
           throw new Error(
             'Firebase Admin is not initialized. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in your Vercel environment variables.'
