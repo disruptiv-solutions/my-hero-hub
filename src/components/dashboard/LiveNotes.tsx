@@ -129,9 +129,13 @@ const LiveNotes = () => {
   const handleStop = useCallback(() => {
     clearTimers();
     stopAllTracks();
-    if (videoRef.current) {
-      // @ts-expect-error – srcObject is supported in modern browsers
-      videoRef.current.srcObject = null;
+    const videoElement = videoRef.current;
+    if (videoElement) {
+      if ("srcObject" in videoElement) {
+        (videoElement as HTMLVideoElement & { srcObject: MediaStream | null }).srcObject = null;
+      } else {
+        videoElement.src = "";
+      }
     }
     setIsCapturing(false);
   }, []);
@@ -225,10 +229,16 @@ const LiveNotes = () => {
       } as DisplayMediaStreamConstraints);
 
       mediaStreamRef.current = stream;
-      const video = videoRef.current!;
-      // @ts-expect-error – srcObject is supported in modern browsers
-      video.srcObject = stream;
-      await video.play().catch(() => {});
+      const videoElement = videoRef.current;
+      if (!videoElement) {
+        return;
+      }
+      if ("srcObject" in videoElement) {
+        (videoElement as HTMLVideoElement & { srcObject: MediaStream | null }).srcObject = stream;
+      } else {
+        videoElement.src = URL.createObjectURL(stream as unknown as MediaSource);
+      }
+      await videoElement.play().catch(() => {});
 
       // First capture immediately for fast feedback
       captureOnce();
