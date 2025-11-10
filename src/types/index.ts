@@ -202,3 +202,24 @@ export interface LiveNoteShot {
   interpretation?: string;
   createdAt: string;
 }
+
+// Voice Notes Types
+export interface VoiceNoteSession {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastSummary?: string;
+  lastTaskCount?: number;
+  totalEntries?: number;
+  summary?: string;
+  tasks?: Array<{ title: string; priority?: "low" | "medium" | "high" }>;
+}
+
+export interface VoiceNoteEntry {
+  id: string;
+  sessionId: string;
+  text: string;
+  createdAt: string;
+}
