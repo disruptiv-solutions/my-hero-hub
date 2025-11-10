@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Mic, MicOff, Save, Trash2, Loader2, StickyNote } from "lucide-react";
+import { Mic, MicOff, Save, Trash2, Loader2, StickyNote, MessageSquare } from "lucide-react";
 import { toast } from "@/lib/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthHeaders } from "@/lib/api-helpers";
@@ -15,12 +15,16 @@ interface Note {
   text: string;
   createdAt: string;
   updatedAt: string;
+  summary?: string;
+  suggestedTasks?: string[];
 }
 
 export default function NotesView() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [lastSavedNoteId, setLastSavedNoteId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -183,6 +187,8 @@ export default function NotesView() {
         throw new Error(error.error || 'Failed to save note');
       }
 
+      const saved = await response.json();
+      setLastSavedNoteId(saved.id);
       toast({
         title: "Success",
         description: "Note saved successfully!",
@@ -199,6 +205,66 @@ export default function NotesView() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveAndSummarize = async () => {
+    if (isSaving || isSummarizing) return;
+    if (!transcript.trim()) {
+      toast({
+        title: "Error",
+        description: "No note to process. Please record a note first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSummarizing(true);
+    try {
+      const headers = await getAuthHeaders();
+      // Ensure note is saved to obtain an ID
+      let noteId = lastSavedNoteId;
+      if (!noteId) {
+        const createRes = await fetch('/api/notes', {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: transcript }),
+        });
+        if (!createRes.ok) {
+          const err = await createRes.json();
+          throw new Error(err.error || 'Failed to save note before summarizing');
+        }
+        const created = await createRes.json();
+        noteId = created.id;
+        setLastSavedNoteId(noteId);
+        setTranscript("");
+      }
+      // Request summarization
+      const sumRes = await fetch(`/api/notes/${noteId}/summarize`, {
+        method: 'POST',
+        headers,
+      });
+      if (!sumRes.ok) {
+        const err = await sumRes.json();
+        throw new Error(err.error || 'Failed to generate summary');
+      }
+      const data = await sumRes.json();
+      toast({
+        title: "AI summary ready",
+        description: "We generated a summary and suggested tasks.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["notes"] });
+    } catch (error: any) {
+      console.error("Error generating summary:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate summary",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSummarizing(false);
     }
   };
 
@@ -261,23 +327,44 @@ export default function NotesView() {
                 className="w-full min-h-[150px] p-4 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Your transcribed note will appear here..."
               />
-              <Button
-                onClick={saveNote}
-                disabled={isSaving || !transcript.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Note
-                  </>
-                )}
-              </Button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Button
+                  onClick={saveNote}
+                  disabled={isSaving || !transcript.trim()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  aria-label="Save transcribed note"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Note
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleSaveAndSummarize}
+                  disabled={isSaving || isSummarizing || !transcript.trim()}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                  aria-label="Save and let AI summarize and suggest tasks"
+                >
+                  {isSummarizing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Save + AI Summary & Tasks
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -309,26 +396,91 @@ export default function NotesView() {
         ) : (
           <div className="space-y-3">
             {notes.map((note: Note) => (
-              <Card key={note.id} className="bg-gray-800 border-gray-700 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white whitespace-pre-wrap break-words">
-                      {note.text}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-2">
-                      {format(new Date(note.createdAt), "MMM d, yyyy 'at' h:mm a")}
-                    </p>
+              <Card key={note.id} className="bg-gray-800 border-gray-700 p-0 overflow-hidden">
+                <details className="group open:bg-gray-800">
+                  <summary className="flex items-center justify-between px-4 py-3 cursor-pointer list-none">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white whitespace-pre-wrap break-words">
+                        {note.text.length > 140 ? `${note.text.slice(0, 140)}…` : note.text}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {format(new Date(note.createdAt), "MMM d, yyyy 'at' h:mm a")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => deleteNoteMutation.mutate(note.id)}
+                        disabled={deleteNoteMutation.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="bg-red-900/20 border-red-700 text-red-400 hover:bg-red-900/40"
+                        aria-label="Delete note"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-4 space-y-3">
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Full Transcript</div>
+                      <div className="text-sm text-gray-200 whitespace-pre-wrap break-words">{note.text}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={async () => {
+                          if (isSummarizing) return;
+                          setIsSummarizing(true);
+                          try {
+                            const headers = await getAuthHeaders();
+                            const res = await fetch(`/api/notes/${note.id}/summarize`, {
+                              method: "POST",
+                              headers,
+                            });
+                            if (!res.ok) {
+                              const err = await res.json();
+                              throw new Error(err.error || "Failed to summarize note");
+                            }
+                            toast({
+                              title: "AI summary ready",
+                              description: "Summary and tasks updated.",
+                            });
+                            queryClient.invalidateQueries({ queryKey: ["notes"] });
+                          } catch (e: any) {
+                            toast({
+                              title: "Error",
+                              description: e.message || "Failed to summarize note",
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setIsSummarizing(false);
+                          }
+                        }}
+                        variant="outline"
+                        className="bg-gray-800/60 border-gray-700 text-gray-200 hover:bg-gray-800"
+                        aria-label="Generate AI summary and tasks for this note"
+                      >
+                        {isSummarizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageSquare className="w-4 h-4 mr-2" />}
+                        Summarize with AI
+                      </Button>
+                    </div>
+                    {note.summary && (
+                      <Card className="bg-gray-800/60 border-gray-700 p-3">
+                        <div className="text-xs text-gray-400 mb-1">AI Summary</div>
+                        <div className="text-sm text-gray-200 whitespace-pre-wrap break-words">{note.summary}</div>
+                      </Card>
+                    )}
+                    {Array.isArray(note.suggestedTasks) && note.suggestedTasks.length > 0 && (
+                      <Card className="bg-gray-800/60 border-gray-700 p-3">
+                        <div className="text-xs text-gray-400 mb-2">Suggested Tasks</div>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {note.suggestedTasks.map((t, idx) => (
+                            <li key={idx} className="text-sm text-gray-200 break-words">{t}</li>
+                          ))}
+                        </ul>
+                      </Card>
+                    )}
                   </div>
-                  <Button
-                    onClick={() => deleteNoteMutation.mutate(note.id)}
-                    disabled={deleteNoteMutation.isPending}
-                    variant="outline"
-                    size="sm"
-                    className="bg-red-900/20 border-red-700 text-red-400 hover:bg-red-900/40 flex-shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                </details>
               </Card>
             ))}
           </div>
