@@ -130,6 +130,15 @@ type HTMLVideoElementWithOptionalSrcObject = HTMLVideoElement & {
   srcObject?: MediaStream | null;
 };
 
+type ExtendedDisplayMediaStreamConstraints = MediaStreamConstraints & {
+  video?: MediaTrackConstraints & {
+    displaySurface?: "application" | "browser" | "monitor" | "window";
+    logicalSurface?: boolean;
+    preferCurrentTab?: boolean;
+  };
+  preferCurrentTab?: boolean;
+};
+
 const handleStop = useCallback(() => {
     clearTimers();
     stopAllTracks();
@@ -225,15 +234,16 @@ const handleStop = useCallback(() => {
       sessionIdRef.current = newId;
 
       // Must be triggered by user gesture
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      const displayConstraints: ExtendedDisplayMediaStreamConstraints = {
         video: {
           displaySurface: "monitor",
           logicalSurface: true,
           frameRate: 30,
-        } as MediaTrackConstraints,
+        },
         audio: false,
         preferCurrentTab: false,
-      } as DisplayMediaStreamConstraints);
+      };
+      const stream = await navigator.mediaDevices.getDisplayMedia(displayConstraints);
 
       mediaStreamRef.current = stream;
       const videoElement = videoRef.current;
