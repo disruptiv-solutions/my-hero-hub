@@ -250,10 +250,11 @@ const handleStop = useCallback(() => {
       if (!videoElement) {
         return;
       }
-      if ("srcObject" in videoElement) {
-        (videoElement as HTMLVideoElement & { srcObject: MediaStream | null }).srcObject = stream;
+      const videoWithSrcObject = videoElement as HTMLVideoElementWithOptionalSrcObject;
+      if (typeof videoWithSrcObject.srcObject !== "undefined") {
+        videoWithSrcObject.srcObject = stream;
       } else {
-        videoElement.src = URL.createObjectURL(stream as unknown as MediaSource);
+        videoWithSrcObject.src = URL.createObjectURL(stream as unknown as MediaSource);
       }
       await videoElement.play().catch(() => {});
 
