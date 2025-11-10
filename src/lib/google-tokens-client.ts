@@ -1,5 +1,5 @@
-import { db } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from "firebase/firestore";
+import { getClientDb } from "./firebase";
 
 /**
  * Store Google OAuth tokens in Firestore for a user (client-side only)
@@ -17,9 +17,13 @@ export const storeGoogleTokens = async (
   email?: string
 ) => {
   try {
-    const userRef = doc(db, 'users', userId);
+    const db = getClientDb();
+    if (!db) {
+      throw new Error("Firebase is not configured for the current environment.");
+    }
+    const userRef = doc(db, "users", userId);
     
-    const data: any = {
+    const data: Record<string, unknown> = {
       googleAccessToken: accessToken,
       googleRefreshToken: refreshToken || null,
       googleTokenExpiresAt: expiresAt || null,

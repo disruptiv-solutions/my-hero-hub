@@ -1,12 +1,13 @@
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as firebaseSignOut,
   User,
   onAuthStateChanged,
-  getIdToken
+  getIdToken,
+  Unsubscribe,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { getClientAuth } from "./firebase";
 import { storeGoogleTokens } from "./google-tokens-client";
 
 const googleProvider = new GoogleAuthProvider();
@@ -20,7 +21,16 @@ googleProvider.setCustomParameters({
   prompt: 'consent'
 });
 
+const getRequiredAuth = (): NonNullable<ReturnType<typeof getClientAuth>> => {
+  const auth = getClientAuth();
+  if (!auth) {
+    throw new Error("Firebase is not configured for the current environment.");
+  }
+  return auth;
+};
+
 export const signInWithGoogle = async () => {
+  const auth = getRequiredAuth();
   try {
     const result = await signInWithPopup(auth, googleProvider);
     // The signed-in user info
@@ -61,6 +71,10 @@ export const signInWithGoogle = async () => {
 };
 
 export const signOut = async () => {
+  const auth = getClientAuth();
+  if (!auth) {
+    return;
+  }
   try {
     await firebaseSignOut(auth);
   } catch (error) {
@@ -70,14 +84,27 @@ export const signOut = async () => {
 };
 
 export const getCurrentUser = (): User | null => {
+  const auth = getClientAuth();
+  if (!auth) {
+    return null;
+  }
   return auth.currentUser;
 };
 
-export const onAuthChange = (callback: (user: User | null) => void) => {
+export const onAuthChange = (callback: (user: User | null) => void): Unsubscribe => {
+  const auth = getClientAuth();
+  if (!auth) {
+    callback(null);
+    return () => {};
+  }
   return onAuthStateChanged(auth, callback);
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
+  const auth = getClientAuth();
+  if (!auth) {
+    return null;
+  }
   const user = auth.currentUser;
   if (!user) return null;
   

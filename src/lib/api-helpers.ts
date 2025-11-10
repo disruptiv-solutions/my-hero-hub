@@ -1,4 +1,4 @@
-import { auth } from "./firebase";
+import { getClientAuth } from "./firebase";
 import { getIdToken } from "firebase/auth";
 
 /**
@@ -7,6 +7,10 @@ import { getIdToken } from "firebase/auth";
  * @returns Headers object with Authorization header, or empty object if not authenticated
  */
 export const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  const auth = getClientAuth();
+  if (!auth) {
+    return {};
+  }
   const user = auth.currentUser;
   if (!user) {
     return {};
@@ -22,6 +26,7 @@ export const getAuthHeaders = async (): Promise<Record<string, string>> => {
     return {};
   }
 };
+
 
 
 
