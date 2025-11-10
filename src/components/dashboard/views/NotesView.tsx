@@ -8,6 +8,7 @@ import { toast } from "@/lib/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getAuthHeaders } from "@/lib/api-helpers";
 import { format } from "date-fns";
+import LiveNotes from "@/components/dashboard/LiveNotes";
 
 interface Note {
   id: string;
@@ -286,6 +287,9 @@ export default function NotesView() {
         </div>
       </Card>
 
+      {/* Live Notes (Screen Snapshots) */}
+      <LiveNotes />
+
       {/* Saved Notes List */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-white">Saved Notes</h3>
@@ -333,6 +337,7 @@ export default function NotesView() {
     </div>
   );
 }
+
 
 
 

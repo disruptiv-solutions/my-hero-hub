@@ -41,6 +41,7 @@ export async function GET(
         notes: data.notes || undefined,
         projectCount: data.projectCount || 0,
         newsletterSubscribed: data.newsletterSubscribed || false,
+        events: Array.isArray(data.events) ? data.events : [],
       };
       return NextResponse.json({ client });
     }

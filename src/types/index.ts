@@ -183,4 +183,22 @@ export interface AIResponse {
   suggestions?: string[];
 }
 
+// Live Notes Types
+export interface LiveNoteSession {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastSummary?: string;
+  totalShots?: number;
+  summary?: string;
+}
 
+export interface LiveNoteShot {
+  id: string;
+  sessionId: string;
+  imageDataUrl: string;
+  interpretation?: string;
+  createdAt: string;
+}
