@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-helpers";
 import { adminDb } from "@/lib/firebase-admin";
 
+export const runtime = "nodejs";
+
 async function callOpenRouter(apiKey: string, body: Record<string, any>) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

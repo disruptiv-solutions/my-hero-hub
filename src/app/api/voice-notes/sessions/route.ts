@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-helpers";
 import { adminDb } from "@/lib/firebase-admin";
 
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getFirebaseUser(request);

@@ -48,7 +48,12 @@ export default function NotesView() {
     queryFn: async () => {
       const headers = await getAuthHeaders();
       const res = await fetch("/api/voice-notes/sessions", { headers });
-      if (!res.ok) throw new Error("Failed to fetch voice note sessions");
+      if (res.status === 401) return { sessions: [] };
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        console.error("Failed to fetch voice note sessions:", res.status, txt);
+        return { sessions: [] };
+      }
       return res.json();
     },
   });
@@ -294,7 +299,13 @@ export default function NotesView() {
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ title: `Voice Note - ${new Date().toLocaleString()}` }),
       });
-      if (!createRes.ok) throw new Error("Failed to create session");
+      if (createRes.status === 401) {
+        throw new Error("You must be signed in to save and summarize.");
+      }
+      if (!createRes.ok) {
+        const txt = await createRes.text().catch(() => "");
+        throw new Error(`Failed to create session (${createRes.status}). ${txt}`);
+      }
       const created = await createRes.json();
       const sid = created.session?.id;
       if (!sid) throw new Error("No session id returned");
@@ -304,7 +315,13 @@ export default function NotesView() {
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ text: transcript }),
       });
-      if (!tRes.ok) throw new Error("Failed to save transcript");
+      if (tRes.status === 401) {
+        throw new Error("You must be signed in to save transcript.");
+      }
+      if (!tRes.ok) {
+        const txt = await tRes.text().catch(() => "");
+        throw new Error(`Failed to save transcript (${tRes.status}). ${txt}`);
+      }
 
       toast({ title: "Saved", description: "Transcript saved to a session." });
       setTranscript("");
@@ -316,7 +333,9 @@ export default function NotesView() {
           method: "POST",
           headers,
         });
-        if (sRes.ok) {
+        if (sRes.status === 401) {
+          toast({ title: "Sign in required", description: "Please sign in to run AI summarization.", variant: "destructive" });
+        } else if (sRes.ok) {
           const payload = await sRes.json();
           setDetails((prev) => ({
             ...prev,
@@ -324,7 +343,8 @@ export default function NotesView() {
           }));
           toast({ title: "AI Complete", description: "Summary and tasks generated." });
         } else {
-          toast({ title: "AI Failed", description: "Could not generate summary.", variant: "destructive" });
+          const txt = await sRes.text().catch(() => "");
+          toast({ title: "AI Failed", description: `Could not generate summary. ${txt}`, variant: "destructive" });
         }
         setSummarizing((prev) => ({ ...prev, [sid]: false }));
       }
