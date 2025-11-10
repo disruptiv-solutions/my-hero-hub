@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   Circle,
@@ -12,6 +12,7 @@ import {
   Mail,
   Calendar as CalendarIcon,
   CreditCard,
+  GripVertical,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,11 +34,88 @@ interface Task {
   order: number;
 }
 
+type SidebarSectionKey = "quick-stats" | "priorities" | "activity";
+const DEFAULT_SECTION_ORDER: SidebarSectionKey[] = [
+  "quick-stats",
+  "priorities",
+  "activity",
+];
+
 const RightSidebar = () => {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [sectionOrder, setSectionOrder] = useState<SidebarSectionKey[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_SECTION_ORDER;
+    try {
+      const raw = window.localStorage.getItem("rightSidebarSectionOrder");
+      if (!raw) return DEFAULT_SECTION_ORDER;
+      const parsed = JSON.parse(raw) as SidebarSectionKey[];
+      // Validate and ensure all sections exist exactly once
+      const unique = Array.from(new Set(parsed)).filter((s): s is SidebarSectionKey =>
+        ["quick-stats", "priorities", "activity"].includes(s)
+      );
+      const missing = DEFAULT_SECTION_ORDER.filter((s) => !unique.includes(s));
+      return [...unique, ...missing].slice(0, DEFAULT_SECTION_ORDER.length);
+    } catch {
+      return DEFAULT_SECTION_ORDER;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("rightSidebarSectionOrder", JSON.stringify(sectionOrder));
+    } catch {
+      // ignore persistence errors
+    }
+  }, [sectionOrder]);
+  const moveSection = (fromKey: SidebarSectionKey, toKey: SidebarSectionKey) => {
+    if (fromKey === toKey) return;
+    setSectionOrder((prev) => {
+      const next = prev.slice();
+      const fromIdx = next.indexOf(fromKey);
+      const toIdx = next.indexOf(toKey);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, fromKey);
+      return next;
+    });
+  };
+  const handleDragStartFor = (key: SidebarSectionKey) => (e: React.DragEvent) => {
+    e.dataTransfer.setData("text/plain", key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver: React.DragEventHandler<HTMLDivElement> = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDropOn = (targetKey: SidebarSectionKey) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain") as SidebarSectionKey;
+    if (!sourceKey) return;
+    moveSection(sourceKey, targetKey);
+  };
+  const handleKeyReorderFor = (key: SidebarSectionKey) => (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    setSectionOrder((prev) => {
+      const idx = prev.indexOf(key);
+      if (idx === -1) return prev;
+      if (e.key === "ArrowUp" && idx > 0) {
+        const next = prev.slice();
+        const [item] = next.splice(idx, 1);
+        next.splice(idx - 1, 0, item);
+        return next;
+      }
+      if (e.key === "ArrowDown" && idx < prev.length - 1) {
+        const next = prev.slice();
+        const [item] = next.splice(idx, 1);
+        next.splice(idx + 1, 0, item);
+        return next;
+      }
+      return prev;
+    });
+  };
   
   // Fetch tasks from API
   const { data: tasksData, isLoading: isLoadingTasks } = useQuery({
@@ -238,169 +316,227 @@ const RightSidebar = () => {
     );
   }
 
-  return (
-    <div className="h-full bg-gray-900 border-l border-gray-800 p-4 space-y-6 overflow-y-auto">
-      {/* Quick Stats */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-white mb-3">Quick Stats</h3>
-
-        <Card className="bg-gradient-to-br from-green-900/40 to-green-800/20 border-green-700/50 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-green-300">Weekly Revenue</div>
-              <div className="text-xl font-bold text-white">
-                ${(financialData?.weeklyRevenue || 0).toLocaleString()}
-              </div>
-            </div>
-            <DollarSign className="w-8 h-8 text-green-400 opacity-50" />
-          </div>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-700/50 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-blue-300">Pipeline Value</div>
-              <div className="text-xl font-bold text-white">
-                ${(financialData?.pipelineValue || 0).toLocaleString()}
-              </div>
-            </div>
-            <TrendingUp className="w-8 h-8 text-blue-400 opacity-50" />
-          </div>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border-purple-700/50 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-purple-300">Active Clients</div>
-              <div className="text-xl font-bold text-white">
-                {activeClientsCount}
-              </div>
-            </div>
-            <Users className="w-8 h-8 text-purple-400 opacity-50" />
-          </div>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-900/40 to-orange-800/20 border-orange-700/50 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-orange-300">Marketing Spend</div>
-              <div className="text-xl font-bold text-white">
-                ${(marketingData?.totalSpend || 0).toLocaleString()}
-              </div>
-            </div>
-            <CreditCard className="w-8 h-8 text-orange-400 opacity-50" />
-          </div>
-        </Card>
+  const QuickStatsSection = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold text-white">Quick Stats</h3>
+        <button
+          draggable
+          onDragStart={handleDragStartFor("quick-stats")}
+          onKeyDown={handleKeyReorderFor("quick-stats")}
+          className="text-gray-400 hover:text-gray-200 p-1 rounded cursor-grab active:cursor-grabbing"
+          aria-label="Reorder Quick Stats section. Use drag or arrow keys."
+          tabIndex={0}
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Today's Priorities */}
-      <Card className="bg-gray-800 border-gray-700 p-4">
-        <h3 className="text-sm font-semibold text-white mb-3">
+      <Card className="bg-gradient-to-br from-green-900/40 to-green-800/20 border-green-700/50 p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-green-300">Weekly Revenue</div>
+            <div className="text-xl font-bold text-white">
+              ${(financialData?.weeklyRevenue || 0).toLocaleString()}
+            </div>
+          </div>
+          <DollarSign className="w-8 h-8 text-green-400 opacity-50" />
+        </div>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-blue-700/50 p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-blue-300">Pipeline Value</div>
+            <div className="text-xl font-bold text-white">
+              ${(financialData?.pipelineValue || 0).toLocaleString()}
+            </div>
+          </div>
+          <TrendingUp className="w-8 h-8 text-blue-400 opacity-50" />
+        </div>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border-purple-700/50 p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-purple-300">Active Clients</div>
+            <div className="text-xl font-bold text-white">
+              {activeClientsCount}
+            </div>
+          </div>
+          <Users className="w-8 h-8 text-purple-400 opacity-50" />
+        </div>
+      </Card>
+
+      <Card className="bg-gradient-to-br from-orange-900/40 to-orange-800/20 border-orange-700/50 p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-orange-300">Marketing Spend</div>
+            <div className="text-xl font-bold text-white">
+              ${(marketingData?.totalSpend || 0).toLocaleString()}
+            </div>
+          </div>
+          <CreditCard className="w-8 h-8 text-orange-400 opacity-50" />
+        </div>
+      </Card>
+    </div>
+  );
+
+  const PrioritiesSection = (
+    <Card className="bg-gray-800 border-gray-700 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">
           Today&apos;s Priorities
         </h3>
-        <div className="space-y-2 mb-3">
-          {isLoadingTasks ? (
-            <div className="text-center py-4 text-gray-400 text-sm">Loading tasks...</div>
-          ) : displayTasks.length === 0 ? (
-            <div className="text-center py-4 text-gray-500 text-sm">No tasks yet. Add one below!</div>
-          ) : (
-            displayTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center gap-2 group hover:bg-gray-750 p-2 rounded transition-colors"
+        <button
+          draggable
+          onDragStart={handleDragStartFor("priorities")}
+          onKeyDown={handleKeyReorderFor("priorities")}
+          className="text-gray-400 hover:text-gray-200 p-1 rounded cursor-grab active:cursor-grabbing"
+          aria-label="Reorder Today's Priorities section. Use drag or arrow keys."
+          tabIndex={0}
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="space-y-2 mb-3">
+        {isLoadingTasks ? (
+          <div className="text-center py-4 text-gray-400 text-sm">Loading tasks...</div>
+        ) : displayTasks.length === 0 ? (
+          <div className="text-center py-4 text-gray-500 text-sm">No tasks yet. Add one below!</div>
+        ) : (
+          displayTasks.map((task) => (
+            <div
+              key={task.id}
+              className="flex items-center gap-2 group hover:bg-gray-750 p-2 rounded transition-colors"
+            >
+              <button
+                onClick={() => handleToggleTask(task)}
+                className="flex-shrink-0"
+                disabled={updateTaskMutation.isPending}
+                aria-label={
+                  task.completed ? "Mark as incomplete" : "Mark as complete"
+                }
               >
-                <button
-                  onClick={() => handleToggleTask(task)}
-                  className="flex-shrink-0"
-                  disabled={updateTaskMutation.isPending}
-                  aria-label={
-                    task.completed ? "Mark as incomplete" : "Mark as complete"
-                  }
-                >
-                  {task.completed ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-gray-500" />
-                  )}
-                </button>
-                <span
-                  className={`flex-1 text-sm ${
-                    task.completed
-                      ? "line-through text-gray-500"
-                      : "text-gray-300"
-                  }`}
-                >
-                  {task.title}
-                </span>
-                <button
-                  onClick={() => handleDeleteTask(task.id)}
-                  disabled={deleteTaskMutation.isPending}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="Delete task"
-                >
-                  <Trash2 className="w-4 h-4 text-red-400" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="Add new task..."
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
-            className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 text-sm"
-          />
-          <Button
-            onClick={handleAddTask}
-            disabled={addTaskMutation.isPending || !newTaskTitle.trim()}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-            aria-label="Add task"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
-      </Card>
+                {task.completed ? (
+                  <CheckCircle2 className="w-5 h-5 text-green-400" />
+                ) : (
+                  <Circle className="w-5 h-5 text-gray-500" />
+                )}
+              </button>
+              <span
+                className={`flex-1 text-sm ${
+                  task.completed
+                    ? "line-through text-gray-500"
+                    : "text-gray-300"
+                }`}
+              >
+                {task.title}
+              </span>
+              <button
+                onClick={() => handleDeleteTask(task.id)}
+                disabled={deleteTaskMutation.isPending}
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Delete task"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          placeholder="Add new task..."
+          value={newTaskTitle}
+          onChange={(e) => setNewTaskTitle(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
+          className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 text-sm"
+        />
+        <Button
+          onClick={handleAddTask}
+          disabled={addTaskMutation.isPending || !newTaskTitle.trim()}
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-700"
+          aria-label="Add task"
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
+      </div>
+    </Card>
+  );
 
-      {/* Recent Activity Feed */}
-      <Card className="bg-gray-800 border-gray-700 p-4">
-        <h3 className="text-sm font-semibold text-white mb-3">Recent Activity</h3>
-        <div className="space-y-3">
-          {activityFeed.map((item) => {
-            const Icon =
-              item.type === "email"
-                ? Mail
-                : item.type === "calendar"
-                ? CalendarIcon
-                : item.type === "payment"
-                ? DollarSign
-                : Users;
+  const ActivitySection = (
+    <Card className="bg-gray-800 border-gray-700 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
+        <button
+          draggable
+          onDragStart={handleDragStartFor("activity")}
+          onKeyDown={handleKeyReorderFor("activity")}
+          className="text-gray-400 hover:text-gray-200 p-1 rounded cursor-grab active:cursor-grabbing"
+          aria-label="Reorder Recent Activity section. Use drag or arrow keys."
+          tabIndex={0}
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="space-y-3">
+        {activityFeed.map((item) => {
+          const Icon =
+            item.type === "email"
+              ? Mail
+              : item.type === "calendar"
+              ? CalendarIcon
+              : item.type === "payment"
+              ? DollarSign
+              : Users;
 
-            return (
-              <div key={item.id} className="flex gap-3">
-                <div
-                  className={`flex-shrink-0 w-8 h-8 rounded-full bg-${item.color}-900/40 flex items-center justify-center`}
-                >
-                  <Icon className={`w-4 h-4 text-${item.color}-400`} />
+          return (
+            <div key={item.id} className="flex gap-3">
+              <div
+                className={`flex-shrink-0 w-8 h-8 rounded-full bg-${item.color}-900/40 flex items-center justify-center`}
+              >
+                <Icon className={`w-4 h-4 text-${item.color}-400`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-white">
+                  {item.title}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white">
-                    {item.title}
-                  </div>
-                  <div className="text-xs text-gray-400">{item.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {formatDistanceToNow(new Date(item.timestamp), {
-                      addSuffix: true,
-                    })}
-                  </div>
+                <div className="text-xs text-gray-400">{item.description}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {formatDistanceToNow(new Date(item.timestamp), {
+                    addSuffix: true,
+                  })}
                 </div>
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+
+  const renderSectionByKey = (key: SidebarSectionKey) => {
+    if (key === "quick-stats") return QuickStatsSection;
+    if (key === "priorities") return PrioritiesSection;
+    return ActivitySection;
+  };
+
+  return (
+    <div className="h-full bg-gray-900 border-l border-gray-800 p-4 space-y-6 overflow-y-auto">
+      {sectionOrder.map((key) => (
+        <div
+          key={key}
+          onDragOver={handleDragOver}
+          onDrop={handleDropOn(key)}
+          className="rounded outline-none"
+          tabIndex={0}
+          aria-label={`Section ${key}`}
+        >
+          {renderSectionByKey(key)}
         </div>
-      </Card>
+      ))}
     </div>
   );
 };
