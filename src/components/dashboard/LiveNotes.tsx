@@ -126,17 +126,24 @@ const LiveNotes = () => {
     setNextCaptureInMs(null);
   };
 
-  const handleStop = useCallback(() => {
+type HTMLVideoElementWithOptionalSrcObject = HTMLVideoElement & {
+  srcObject?: MediaStream | null;
+};
+
+const handleStop = useCallback(() => {
     clearTimers();
     stopAllTracks();
     const videoElement = videoRef.current;
-    if (videoElement) {
-      if ("srcObject" in videoElement) {
-        (videoElement as HTMLVideoElement & { srcObject: MediaStream | null }).srcObject = null;
-      } else {
-        videoElement.src = "";
-      }
-    }
+  if (!videoElement) {
+    setIsCapturing(false);
+    return;
+  }
+
+  const videoWithSrcObject = videoElement as HTMLVideoElementWithOptionalSrcObject;
+  if ("srcObject" in videoWithSrcObject && videoWithSrcObject.srcObject) {
+    videoWithSrcObject.srcObject = null;
+  }
+  videoWithSrcObject.src = "";
     setIsCapturing(false);
   }, []);
 
