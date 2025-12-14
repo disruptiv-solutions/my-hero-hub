@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-helpers";
 import { getStripeClient } from "@/lib/stripe";
 import { adminDb } from "@/lib/firebase-admin";
+import { removeUndefined } from "@/lib/utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,12 +30,10 @@ export async function POST(request: NextRequest) {
       ).id;
 
     if (!existingStripeCustomerId) {
-      await userRef.set(
-        {
-          stripeCustomerId: stripeCustomer,
-        },
-        { merge: true }
-      );
+      const updateData = removeUndefined({
+        stripeCustomerId: stripeCustomer,
+      });
+      await userRef.set(updateData, { merge: true });
     }
 
     const session = await stripe.financialConnections.sessions.create({

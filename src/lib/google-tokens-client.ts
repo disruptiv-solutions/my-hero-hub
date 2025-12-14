@@ -1,6 +1,5 @@
-import { doc, setDoc } from "firebase/firestore";
 import { getClientDb } from "./firebase";
-import { removeUndefined } from "./utils";
+import { safeSetDoc } from "./firestore-helpers";
 
 /**
  * Store Google OAuth tokens in Firestore for a user (client-side only)
@@ -22,7 +21,6 @@ export const storeGoogleTokens = async (
     if (!db) {
       throw new Error("Firebase is not configured for the current environment.");
     }
-    const userRef = doc(db, "users", userId);
     
     const data: Record<string, unknown> = {
       googleAccessToken: accessToken,
@@ -36,10 +34,8 @@ export const storeGoogleTokens = async (
       data.email = email;
     }
     
-    // Remove undefined values before saving (Firestore doesn't allow undefined)
-    const cleanedData = removeUndefined(data);
-    
-    await setDoc(userRef, cleanedData, { merge: true });
+    // Use safeSetDoc which automatically removes undefined values
+    await safeSetDoc(db, "users", userId, data, { merge: true });
   } catch (error) {
     console.error('Error storing Google tokens:', error);
     throw error;
