@@ -105,6 +105,11 @@ FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...your key...\n-----END PRIVATE KEY-----\n"
 
+# Stripe Financial Connections
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxx
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+
 # Optional: AI Assistant (for advanced queries)
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
@@ -126,7 +131,18 @@ npm run dev
 
 Open [http://localhost:3005](http://localhost:3005) in your browser.
 
-### 6. Sign In
+### 6. Stripe Financial Connections (Bank Linking)
+
+1. In Stripe Dashboard, enable **Financial Connections** and use your test keys.
+2. Set the three Stripe env vars above in `.env.local`.
+3. Install the Stripe CLI and run:
+   ```bash
+   stripe listen --events financial_connections.account.created,financial_connections.account.refreshed_balance,financial_connections.account.refreshed_transactions --forward-to http://localhost:3006/api/stripe/webhook
+   ```
+4. In the dashboard Financial tab, click **Connect bank account** to start the linking flow. We store linked accounts and transactions in Firestore under `users/{uid}`.
+5. After linking, transactions may take a moment to refresh. The API requests a refresh automatically and skips gracefully until data is ready.
+
+### 7. Sign In
 
 1. Click "Sign in with Google"
 2. Grant permissions for Calendar and Gmail access

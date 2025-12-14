@@ -82,6 +82,99 @@ export interface Client {
   projectCount?: number;
   newsletterSubscribed?: boolean;
   events?: string[];
+  transcripts?: ClientTranscript[];
+  // Analytics stats (optional, added when fetching clients list)
+  analytics?: {
+    sentiment?: 'positive' | 'neutral' | 'negative';
+    engagement?: 'high' | 'medium' | 'low';
+    nextBestAction?: string;
+  };
+  transcriptCount?: number;
+  actionItemCount?: number;
+}
+
+export interface ClientTranscript {
+  id: string;
+  content: string;
+  title?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ClientChatSession {
+  id: string;
+  clientId: string;
+  userId: string;
+  title?: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+}
+
+export interface ClientActionItem {
+  id: string;
+  clientId: string;
+  title: string;
+  description?: string;
+  status: "pending" | "in-progress" | "completed" | "cancelled";
+  priority: "low" | "medium" | "high";
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  masterPriorityId?: string; // Link to master priority if synced
+}
+
+export interface MasterPriority {
+  id: string;
+  userId: string;
+  title: string;
+  description?: string;
+  priority: "low" | "medium" | "high";
+  status: "pending" | "in-progress" | "completed" | "cancelled";
+  clientId?: string; // Optional: link to a client
+  clientActionItemId?: string; // Optional: link to client action item
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+export interface ClientAnalytics {
+  id: string;
+  clientId: string;
+  avatar: {
+    description: string;
+    characteristics: string[];
+    ageRange?: string; // e.g., "25-35", "40-50", "55+"
+  };
+  sentimentTrend: {
+    current: "positive" | "neutral" | "negative";
+    change: number; // percentage change
+    description: string;
+  };
+  engagementLevel: {
+    level: "high" | "medium" | "low";
+    status: string;
+    description: string;
+  };
+  keyTopics: string[];
+  nextBestAction: {
+    action: string;
+    reasoning: string;
+  };
+  analysisHistory: Array<{
+    timestamp: string;
+    summary: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Project {
@@ -106,8 +199,10 @@ export interface Interaction {
 // Financial Types
 export interface Transaction {
   id: string;
+  accountId?: string;
   clientId?: string;
   amount: number;
+  currency?: string;
   date: string;
   type: 'income' | 'expense';
   status: 'pending' | 'completed' | 'cancelled';
@@ -121,6 +216,25 @@ export interface FinancialMetrics {
   monthlyRevenue: number;
   pipelineValue: number;
   recentTransactions: Transaction[];
+}
+
+export interface BankAccount {
+  id: string;
+  stripeAccountId: string;
+  institutionName?: string | null;
+  last4?: string | null;
+  category?: string | null;
+  status?: string;
+  permissions?: string[];
+  supportedPaymentMethodTypes?: string[];
+  balance?: {
+    currency?: string;
+    current?: number;
+    available?: number;
+    asOf?: string;
+  };
+  linkedAt?: string;
+  livemode?: boolean;
 }
 
 // Marketing Types

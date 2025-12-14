@@ -12,6 +12,8 @@ type IncomingContact = {
   notes?: string | null;
   events?: string[];
   eventName?: string;
+  tags?: string[]; // AI cleaning returns "tags" field
+  tagName?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -45,12 +47,18 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Normalize events array
+      // Normalize tags/events array - AI returns "tags", legacy uses "events"
       const events =
-        Array.isArray(contact.events) && contact.events.length > 0
+        Array.isArray(contact.tags) && contact.tags.length > 0
+          ? contact.tags
+              .filter((e) => typeof e === "string" && e.trim())
+              .map((e) => e.trim())
+          : Array.isArray(contact.events) && contact.events.length > 0
           ? contact.events
               .filter((e) => typeof e === "string" && e.trim())
               .map((e) => e.trim())
+          : contact.tagName
+          ? [String(contact.tagName).trim()]
           : contact.eventName
           ? [String(contact.eventName).trim()]
           : [];

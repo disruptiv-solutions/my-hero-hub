@@ -33,10 +33,49 @@ export async function GET(request: NextRequest) {
     const snapshot = await query.get();
     let clients: Client[] = [];
 
-    snapshot.forEach((doc) => {
+    // Fetch analytics and counts for all clients in parallel
+    const clientPromises = snapshot.docs.map(async (doc) => {
       const data = doc.data();
-      clients.push({
-        id: doc.id,
+      const clientId = doc.id;
+
+      let analytics = null;
+      let actionItemCount = 0;
+
+      try {
+        // Get analytics (may fail if index doesn't exist yet)
+        const analyticsSnapshot = await adminDb
+          .collection("clientAnalytics")
+          .where("clientId", "==", clientId)
+          .where("userId", "==", user.uid)
+          .orderBy("updatedAt", "desc")
+          .limit(1)
+          .get();
+        
+        if (!analyticsSnapshot.empty) {
+          analytics = analyticsSnapshot.docs[0].data();
+        }
+      } catch (error) {
+        // Index might not exist yet, skip analytics
+        console.warn(`Analytics query failed for client ${clientId}:`, error);
+      }
+
+      try {
+        // Get action items count
+        const actionItemsSnapshot = await adminDb
+          .collection("clientActionItems")
+          .where("clientId", "==", clientId)
+          .where("userId", "==", user.uid)
+          .get();
+        actionItemCount = actionItemsSnapshot.size;
+      } catch (error) {
+        console.warn(`Action items query failed for client ${clientId}:`, error);
+      }
+
+      // Get transcript count
+      const transcripts = Array.isArray(data.transcripts) ? data.transcripts : [];
+
+      return {
+        id: clientId,
         name: data.name,
         email: data.email,
         phone: data.phone || undefined,
@@ -48,8 +87,19 @@ export async function GET(request: NextRequest) {
         projectCount: data.projectCount || 0,
         newsletterSubscribed: data.newsletterSubscribed || false,
         events: Array.isArray(data.events) ? data.events : [],
-      });
+        transcripts: transcripts,
+        // Add stats
+        analytics: analytics ? {
+          sentiment: analytics.sentimentTrend?.current,
+          engagement: analytics.engagementLevel?.level,
+          nextBestAction: analytics.nextBestAction?.action,
+        } : undefined,
+        transcriptCount: transcripts.length,
+        actionItemCount: actionItemCount > 0 ? actionItemCount : undefined,
+      };
     });
+
+    clients = await Promise.all(clientPromises);
 
     // Client-side filtering for search (Firestore doesn't support case-insensitive search easily)
     if (search) {
@@ -247,6 +297,86 @@ export async function DELETE(request: NextRequest) {
     console.error("Error deleting client:", error);
     return NextResponse.json(
       { error: "Failed to delete client" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getFirebaseUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    
+    if (!Array.isArray(body.ids) || body.ids.length === 0) {
+      return NextResponse.json(
+        { error: "Client IDs array required" },
+        { status: 400 }
+      );
+    }
+
+    // Verify all clients belong to user and update them
+    const updatePromises = body.ids.map(async (id: string) => {
+      const clientRef = adminDb.collection("clients").doc(id);
+      const clientDoc = await clientRef.get();
+      
+      if (!clientDoc.exists) {
+        throw new Error(`Client ${id} not found`);
+      }
+
+      const clientData = clientDoc.data();
+      if (clientData?.userId !== user.uid) {
+        throw new Error(`Client ${id} forbidden`);
+      }
+
+      const updateData: any = {};
+      
+      // Handle tags/events addition
+      if (body.addTags && Array.isArray(body.addTags)) {
+        const existingEvents = Array.isArray(clientData.events) ? clientData.events : [];
+        const newTags = body.addTags
+          .filter((tag: any) => typeof tag === "string" && tag.trim())
+          .map((tag: string) => tag.trim());
+        updateData.events = Array.from(new Set([...existingEvents, ...newTags]));
+      }
+      
+      // Handle tags/events removal
+      if (body.removeTags && Array.isArray(body.removeTags)) {
+        const existingEvents = Array.isArray(clientData.events) ? clientData.events : [];
+        const tagsToRemove = body.removeTags
+          .filter((tag: any) => typeof tag === "string" && tag.trim())
+          .map((tag: string) => tag.trim());
+        updateData.events = existingEvents.filter((tag: string) => !tagsToRemove.includes(tag));
+      }
+
+      // Handle other bulk updates if needed
+      if (body.status !== undefined) {
+        updateData.status = body.status;
+      }
+      if (body.newsletterSubscribed !== undefined) {
+        updateData.newsletterSubscribed = Boolean(body.newsletterSubscribed);
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await clientRef.update(updateData);
+      }
+
+      return id;
+    });
+
+    await Promise.all(updatePromises);
+
+    return NextResponse.json({ 
+      success: true, 
+      updated: body.ids.length 
+    });
+  } catch (error: any) {
+    console.error("Error bulk updating clients:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to bulk update clients" },
       { status: 500 }
     );
   }

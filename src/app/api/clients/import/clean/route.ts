@@ -7,7 +7,7 @@ type CleanedContact = {
   newsletterSubscribed?: boolean;
   events?: string[];
 };
-
+//
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "openrouter/auto";
 
@@ -62,16 +62,17 @@ function normalizeContacts(payload: any): CleanedContact[] {
       typeof item.newsletterSubscribed === "boolean"
         ? item.newsletterSubscribed
         : ["true", "yes", "y", "1"].includes(String(item.newsletterSubscribed || "").toLowerCase());
-    // Events normalization: accept events (string|string[]) or eventName
+    // Tags normalization: accept tags (string|string[]) or tagName, also check for legacy "events" field
+    // AI returns "tags" but we store as "events" internally
     let events: string[] = [];
-    const rawEvents = item.events ?? item.eventName ?? item["event"] ?? item["event_name"];
-    if (Array.isArray(rawEvents)) {
-      events = rawEvents;
-    } else if (typeof rawEvents === "string") {
+    const rawTags = item.tags ?? item.tagName ?? item["tag"] ?? item["tag_name"] ?? item.events ?? item.eventName ?? item["event"] ?? item["event_name"];
+    if (Array.isArray(rawTags)) {
+      events = rawTags;
+    } else if (typeof rawTags === "string") {
       // Split by common separators; keep hyphens inside names
-      events = rawEvents.split(/[;|]+/).map((e: string) => e.trim()).filter(Boolean);
-      if (events.length === 0 && rawEvents.trim()) {
-        events = [rawEvents.trim()];
+      events = rawTags.split(/[;|]+/).map((e: string) => e.trim()).filter(Boolean);
+      if (events.length === 0 && rawTags.trim()) {
+        events = [rawTags.trim()];
       }
     }
     events = Array.from(new Set(events.filter((e) => typeof e === "string" && e.trim()).map((e) => e.trim())));
@@ -113,15 +114,15 @@ export async function POST(request: NextRequest) {
 Return ONLY JSON, no extra text. Schema:
 {
   "contacts": [
-    { "name": "string", "email": "string", "phone": "string|optional", "newsletterSubscribed": "boolean|optional", "events": "string[]|optional" }
+    { "name": "string", "email": "string", "phone": "string|optional", "newsletterSubscribed": "boolean|optional", "tags": "string[]|optional" }
   ]
 }
 Rules:
-- Accept header variations: name/fullname/firstname+lastname, email/emailaddress, phone/phoneNumber, newsletter/subscribed/registeredForNewsletter, event/eventname/events
+- Accept header variations: name/fullname/firstname+lastname, email/emailaddress, phone/phoneNumber, newsletter/subscribed/registeredForNewsletter, tag/tagname/tags
 - If first/last name provided, combine to "name" as "First Last"
 - Trim whitespace, fix casing, validate emails, infer missing newsletter as false
 - Normalize phone by removing formatting; preserve leading + if present
-- For "events" accept single name or multiple (split on ';' or '|'). Always return an array (unique, trimmed).
+- For "tags" accept single tag or multiple (split on ';' or '|'). Always return an array (unique, trimmed). Store in "tags" field.
 - Remove duplicates by email (keep the first)
 - Exclude rows missing name or email or invalid email`;
 

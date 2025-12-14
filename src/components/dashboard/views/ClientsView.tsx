@@ -35,12 +35,16 @@ import {
   Calendar,
   Loader2,
   Trash2,
+  FileText,
+  CheckSquare,
+  TrendingUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const ClientsView = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"add" | "edit">("add");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -53,6 +57,7 @@ const ClientsView = () => {
   const [importEventTag, setImportEventTag] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [eventInput, setEventInput] = useState<string>("");
+  const [bulkTagInput, setBulkTagInput] = useState<string>("");
 
   type ClientFormValues = {
     name: string;
@@ -402,6 +407,43 @@ const ClientsView = () => {
     },
   });
 
+  const bulkTagMutation = useMutation({
+    mutationFn: async ({ ids, tags }: { ids: string[]; tags: string[] }) => {
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/clients", {
+        method: "PATCH",
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ids,
+          addTags: tags,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to add tags");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setBulkTagInput("");
+      toast({
+        title: "Tags added",
+        description: `Added tags to ${data.updated} selected client(s).`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to add tags",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleToggleSelected = (id: string, checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -466,8 +508,8 @@ const ClientsView = () => {
     const newsletterIdx = headers.findIndex((h) =>
       ["newsletter","subscribed","newslettersubscribed","registeredfornewsletter"].includes(h)
     );
-    const eventsIdx = headers.findIndex((h) =>
-      ["event","eventname","events"].includes(h)
+    const tagsIdx = headers.findIndex((h) =>
+      ["tag","tagname","tags"].includes(h)
     );
     const rows = lines.slice(1).map(splitCsvLine);
     const result = rows
@@ -484,8 +526,8 @@ const ClientsView = () => {
         const newsletter =
           newsletterIdx >= 0 ? parseBoolean(cols[newsletterIdx] || "") : false;
         let events: string[] = [];
-        if (eventsIdx >= 0) {
-          const raw = cols[eventsIdx] || "";
+        if (tagsIdx >= 0) {
+          const raw = cols[tagsIdx] || "";
           events = raw
             ? raw.split(/[;|]+/).map((e) => e.trim()).filter(Boolean)
             : [];
@@ -544,13 +586,41 @@ const ClientsView = () => {
     },
   });
 
+  // Extract all unique tags from clients
+  const allTags = data?.clients
+    ? Array.from(
+        new Set(
+          data.clients
+            .flatMap((client: Client) => client.events || [])
+            .filter(Boolean)
+        )
+      ).sort()
+    : [];
+
   const filteredClients = data?.clients?.filter((client: Client) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      client.name.toLowerCase().includes(query) ||
-      client.email.toLowerCase().includes(query)
-    );
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        client.name.toLowerCase().includes(query) ||
+        client.email.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+
+    // Tag filter
+    if (tagFilter === "other") {
+      // Show clients with no tags
+      return !client.events || client.events.length === 0;
+    } else if (tagFilter !== "all") {
+      // Show clients with the selected tag
+      return (
+        client.events &&
+        Array.isArray(client.events) &&
+        client.events.includes(tagFilter)
+      );
+    }
+
+    return true;
   });
 
   const getStatusColor = (status: string) => {
@@ -758,7 +828,7 @@ const ClientsView = () => {
                 </Label>
               </div>
               <div className="md:col-span-2">
-                <Label htmlFor="client-events" className="text-gray-200">Events</Label>
+                <Label htmlFor="client-events" className="text-gray-200">Tags</Label>
                 <div className="mt-2 flex items-center gap-2">
                   <Input
                     id="client-events"
@@ -869,7 +939,52 @@ const ClientsView = () => {
           </DialogContent>
         </Dialog>
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+              <Input
+                placeholder="Add tags (e.g., Class - 11/15/25)"
+                value={bulkTagInput}
+                onChange={(e) => setBulkTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const tags = bulkTagInput
+                      .split(/[,;]+/)
+                      .map((t) => t.trim())
+                      .filter(Boolean);
+                    if (tags.length === 0) return;
+                    bulkTagMutation.mutate({
+                      ids: Array.from(selectedIds),
+                      tags,
+                    });
+                  }
+                }}
+                className="bg-gray-900 border-gray-600 text-white w-64"
+                disabled={bulkTagMutation.isPending}
+              />
+              <Button
+                onClick={() => {
+                  const tags = bulkTagInput
+                    .split(/[,;]+/)
+                    .map((t) => t.trim())
+                    .filter(Boolean);
+                  if (tags.length === 0) return;
+                  bulkTagMutation.mutate({
+                    ids: Array.from(selectedIds),
+                    tags,
+                  });
+                }}
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={bulkTagMutation.isPending || !bulkTagInput.trim()}
+                aria-label="Add tags to selected clients"
+              >
+                {bulkTagMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Add Tags"
+                )}
+              </Button>
+            </div>
             <Button
               onClick={handleDeleteSelected}
               className="bg-red-700 hover:bg-red-800"
@@ -940,9 +1055,9 @@ const ClientsView = () => {
                 </Button>
               </div>
               <div className="flex items-center gap-3">
-                <Label htmlFor="import-event" className="text-gray-200">Apply event tag (optional)</Label>
+                <Label htmlFor="import-tag" className="text-gray-200">Apply tag (optional)</Label>
                 <Input
-                  id="import-event"
+                  id="import-tag"
                   placeholder="e.g., Class - 11/15/25"
                   value={importEventTag}
                   onChange={(e) => setImportEventTag(e.target.value)}
@@ -963,7 +1078,7 @@ const ClientsView = () => {
                           <th className="p-2">Email</th>
                           <th className="p-2">Phone</th>
                           <th className="p-2">Newsletter</th>
-                          <th className="p-2">Events</th>
+                          <th className="p-2">Tags</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1023,8 +1138,8 @@ const ClientsView = () => {
       </div>
 
       {/* Filters and Search */}
-      <div className="flex gap-4 mb-4">
-        <div className="relative flex-1">
+      <div className="flex gap-4 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             placeholder="Search clients..."
@@ -1033,7 +1148,7 @@ const ClientsView = () => {
             className="pl-10 bg-gray-800 border-gray-700 text-white"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {["all", "lead", "active", "closed"].map((status) => (
             <Button
               key={status}
@@ -1048,6 +1163,22 @@ const ClientsView = () => {
               {status}
             </Button>
           ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={tagFilter} onValueChange={setTagFilter}>
+            <SelectTrigger className="w-[180px] bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Filter by tag" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700 text-white">
+              <SelectItem value="all">All Tags</SelectItem>
+              {allTags.map((tag) => (
+                <SelectItem key={tag} value={tag}>
+                  {tag}
+                </SelectItem>
+              ))}
+              <SelectItem value="other">Other (No Tags)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -1135,11 +1266,70 @@ const ClientsView = () => {
               )}
             </div>
 
+            {client.events && client.events.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-700">
+                <div className="flex flex-wrap gap-1.5">
+                  {client.events.slice(0, 3).map((event) => (
+                    <Badge
+                      key={event}
+                      className="bg-purple-900/30 text-purple-200 border-purple-700 text-xs"
+                    >
+                      {event}
+                    </Badge>
+                  ))}
+                  {client.events.length > 3 && (
+                    <Badge className="bg-gray-700/30 text-gray-400 border-gray-600 text-xs">
+                      +{client.events.length - 3} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+
             {client.notes && (
               <div className="mt-3 pt-3 border-t border-gray-700">
                 <p className="text-xs text-gray-400 line-clamp-2">
                   {client.notes}
                 </p>
+              </div>
+            )}
+
+            {/* Analytics Stats */}
+            {(client.analytics || client.transcriptCount || client.actionItemCount) && (
+              <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                <div className="flex items-center gap-3 text-xs">
+                  {client.analytics?.sentiment && (
+                    <Badge
+                      className={`${
+                        client.analytics.sentiment === "positive"
+                          ? "bg-green-900/40 text-green-300 border-green-700"
+                          : client.analytics.sentiment === "negative"
+                          ? "bg-red-900/40 text-red-300 border-red-700"
+                          : "bg-yellow-900/40 text-yellow-300 border-yellow-700"
+                      } text-xs`}
+                    >
+                      <TrendingUp className="w-3 h-3 mr-1" />
+                      {client.analytics.sentiment}
+                    </Badge>
+                  )}
+                  {client.transcriptCount !== undefined && client.transcriptCount > 0 && (
+                    <div className="flex items-center gap-1 text-gray-400">
+                      <FileText className="w-3 h-3" />
+                      <span>{client.transcriptCount}</span>
+                    </div>
+                  )}
+                  {client.actionItemCount !== undefined && client.actionItemCount > 0 && (
+                    <div className="flex items-center gap-1 text-gray-400">
+                      <CheckSquare className="w-3 h-3" />
+                      <span>{client.actionItemCount}</span>
+                    </div>
+                  )}
+                </div>
+                {client.analytics?.nextBestAction && (
+                  <div className="text-xs text-orange-400 font-medium line-clamp-1">
+                    {client.analytics.nextBestAction}
+                  </div>
+                )}
               </div>
             )}
 
